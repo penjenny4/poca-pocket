@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f9dce9">
-<title>POCA Pocket v6</title>
+<title>POCA Pocket v6.1</title>
 <style>
 *{box-sizing:border-box}
 body{font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff8fb;color:#342a32;margin:0}
@@ -36,13 +36,14 @@ a{color:#a42c6b}
 .suggest{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .suggest button{background:#f7e4ee;color:#86415e;padding:7px 10px;font-size:13px}
 .photo{max-width:180px;max-height:220px;object-fit:contain;border-radius:10px}
+.section-title{margin:20px 0 8px}
 @media(min-width:600px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
 <body>
 
 <header>
-<h1>💗 POCA Pocket <small style="font-size:12px">v6</small></h1>
+<h1>💗 POCA Pocket <small style="font-size:12px">v6.1</small></h1>
 <div class="tabs">
 <button onclick="show('home')">Dashboard</button>
 <button onclick="start()">＋新增</button>
@@ -54,21 +55,12 @@ a{color:#a42c6b}
 
 <section id="home">
 <h2>我的收藏總覽</h2>
+
 <div class="stats-grid">
 <div class="stat">全部小卡<strong id="totalCount">0</strong></div>
 <div class="stat">已入手<strong id="ownedCount">0</strong></div>
 <div class="stat">待收貨<strong id="pendingCount">0</strong></div>
 <div class="stat">想購買<strong id="wishCount">0</strong></div>
-</div>
-
-<div class="panel">
-<h3>🔗 Mercari 快速新增</h3>
-<p class="muted">貼上商品網址，先建立購買紀錄並確認資料。若分享文字包含價格和標題，會嘗試辨識。</p>
-<form id="quickForm">
-<textarea id="quickUrl" rows="2" placeholder="https://jp.mercari.com/item/m..." required></textarea>
-<div id="quickMessage" class="warn"></div>
-<button type="submit" style="width:100%">匯入 Mercari 商品</button>
-</form>
 </div>
 
 <div class="panel">
@@ -83,7 +75,7 @@ a{color:#a42c6b}
 </div>
 <div>
 <label>來源</label>
-<select id="sourceFilter" onchange="render()">
+<select id="sourceFilter">
 <option value="">全部來源</option>
 <option>專輯</option>
 <option>演唱會</option>
@@ -108,11 +100,33 @@ a{color:#a42c6b}
 </div>
 <p id="resultCount" class="muted"></p>
 </div>
+
 <div id="list"></div>
 </section>
 
 <section id="edit" class="hide">
 <h2 id="heading">新增小卡</h2>
+
+<div class="panel">
+<h3>🔗 Mercari 快速新增</h3>
+<p class="muted">
+貼上 Mercari 商品連結，可自動辨識商品 ID，
+並帶入購買平台、日圓幣別及待收貨狀態。
+若分享文字包含商品名稱與價格，也會嘗試填入。
+</p>
+<form id="quickForm">
+<textarea
+id="quickUrl"
+rows="2"
+placeholder="https://jp.mercari.com/item/m..."
+required
+></textarea>
+<div id="quickMessage" class="warn" role="status" style="margin:8px 0"></div>
+<button type="submit" style="width:100%">匯入 Mercari 商品</button>
+</form>
+</div>
+
+<h3 class="section-title">小卡資料</h3>
 <form id="form">
 
 <label>團體／歌手 *</label>
@@ -198,7 +212,10 @@ a{color:#a42c6b}
 <h2>收藏統計</h2>
 <div id="totals" class="panel"></div>
 <h2>備份資料</h2>
-<p class="muted">收藏儲存在此裝置的 IndexedDB。請定期備份，避免清除網站資料後遺失。</p>
+<p class="muted">
+收藏儲存在此裝置的 IndexedDB。
+請定期備份，避免清除網站資料後遺失。
+</p>
 <button onclick="exportData()">匯出 JSON 備份</button>
 <button class="secondary" onclick="document.getElementById('import').click()">匯入備份</button>
 <input type="file" id="import" accept=".json,application/json" class="hide">
@@ -302,7 +319,10 @@ subset.flatMap(c=>[c.concert,c.album]),
 '全部');
 }
 
-$('sourceFilter').addEventListener('change',updateFilters);
+$('sourceFilter').addEventListener('change',()=>{
+updateFilters();
+render();
+});
 
 function render(){
 dashboard();
@@ -342,7 +362,6 @@ el.onclick=()=>start(items.find(c=>c.id===el.dataset.id));
 });
 }
 
-// 最近使用的文字建議
 const suggestionFields=[
 'group','member','name','concert','album','version','seller'
 ];
@@ -390,6 +409,8 @@ F[key].addEventListener('focus',()=>suggestions(key));
 function start(c){
 id=c?.id??null;
 $('form').reset();
+$('quickForm').reset();
+$('quickMessage').textContent='';
 
 photos={front:c?.front||'',back:c?.back||''};
 
@@ -408,7 +429,6 @@ $('front').value='';
 
 pics();
 linkCheck();
-
 suggestionFields.forEach(suggestions);
 show('edit');
 }
