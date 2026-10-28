@@ -1,60 +1,613 @@
 
-$('quickForm').onsubmit = async e => {
-  e.preventDefault();
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f9dce9">
+<title>POCA Pocket v6</title>
+<style>
+*{box-sizing:border-box}
+body{font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff8fb;color:#342a32;margin:0}
+header{background:#f9dce9;padding:20px}
+main{max-width:700px;margin:auto;padding:16px}
+h1{margin:0 0 12px}
+button{border:0;border-radius:12px;background:#dd70a1;color:white;padding:12px;font:inherit;cursor:pointer}
+button:disabled{opacity:.5}
+input,select,textarea{width:100%;padding:12px;border:1px solid #e8cbd9;border-radius:10px;font:inherit;background:white}
+label{display:block;margin:14px 0 5px;font-weight:600}
+.tabs,.row{display:flex;gap:7px;flex-wrap:wrap}
+.tabs button,.row button{flex:1}
+.panel{background:white;border:1px solid #f0dce7;border-radius:14px;padding:14px;margin:10px 0}
+.hide{display:none!important}
+.muted{color:#766674;font-size:13px}
+.warn{color:#a15b00}
+.secondary{background:#f2dce7;color:#75455c}
+a{color:#a42c6b}
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{background:white;border:1px solid #f0dce7;border-radius:14px;padding:15px}
+.stat strong{display:block;font-size:25px;color:#c64f86;margin-top:6px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{display:flex;gap:12px;align-items:center;cursor:pointer}
+.card img{width:80px;height:105px;object-fit:cover;border-radius:9px}
+.card-content{flex:1;min-width:0}
+.card-content div{overflow-wrap:anywhere}
+.tag{display:inline-block;background:#f9e5ef;color:#a42c6b;border-radius:20px;padding:4px 9px;font-size:12px;margin:3px 3px 3px 0}
+.suggest{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.suggest button{background:#f7e4ee;color:#86415e;padding:7px 10px;font-size:13px}
+.photo{max-width:180px;max-height:220px;object-fit:contain;border-radius:10px}
+@media(min-width:600px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
 
-  const raw = $('quickUrl').value.trim();
-  const info = sharedInfo(raw);
-  const productId = mercariId(info.link);
+<header>
+<h1>💗 POCA Pocket <small style="font-size:12px">v6</small></h1>
+<div class="tabs">
+<button onclick="show('home')">Dashboard</button>
+<button onclick="start()">＋新增</button>
+<button onclick="show('stats')">統計／備份</button>
+</div>
+</header>
 
-  if (!productId) {
-    $('quickMessage').textContent =
-      '請貼上有效的 Mercari 商品網址';
-    return;
-  }
+<main>
 
-  const productUrl =
-    'https://jp.mercari.com/item/' + productId;
+<section id="home">
+<h2>我的收藏總覽</h2>
+<div class="stats-grid">
+<div class="stat">全部小卡<strong id="totalCount">0</strong></div>
+<div class="stat">已入手<strong id="ownedCount">0</strong></div>
+<div class="stat">待收貨<strong id="pendingCount">0</strong></div>
+<div class="stat">想購買<strong id="wishCount">0</strong></div>
+</div>
 
-  const existing = items.find(c =>
-    c.productUrl &&
-    sameLink(c.productUrl, productUrl)
-  );
+<div class="panel">
+<h3>🔗 Mercari 快速新增</h3>
+<p class="muted">貼上商品網址，先建立購買紀錄並確認資料。若分享文字包含價格和標題，會嘗試辨識。</p>
+<form id="quickForm">
+<textarea id="quickUrl" rows="2" placeholder="https://jp.mercari.com/item/m..." required></textarea>
+<div id="quickMessage" class="warn"></div>
+<button type="submit" style="width:100%">匯入 Mercari 商品</button>
+</form>
+</div>
 
-  if (existing) {
-    const proceed = confirm(
-      '⚠️ 這個 Mercari 商品已經登記過！\n' +
-      '確定要再新增一筆嗎？'
-    );
+<div class="panel">
+<h3>🔎 搜尋與篩選</h3>
+<input id="query" placeholder="搜尋團體、成員、專輯、演唱會..." oninput="render()">
+<div class="filters" style="margin-top:10px">
+<div>
+<label>成員</label>
+<select id="memberFilter" onchange="render()">
+<option value="">全部成員</option>
+</select>
+</div>
+<div>
+<label>來源</label>
+<select id="sourceFilter" onchange="render()">
+<option value="">全部來源</option>
+<option>專輯</option>
+<option>演唱會</option>
+<option>其他／特典</option>
+</select>
+</div>
+<div>
+<label>專輯／演唱會</label>
+<select id="eventFilter" onchange="render()">
+<option value="">全部</option>
+</select>
+</div>
+<div>
+<label>收藏狀態</label>
+<select id="statusFilter" onchange="render()">
+<option value="">全部狀態</option>
+<option>已入手</option>
+<option>已下單</option>
+<option>想購買</option>
+</select>
+</div>
+</div>
+<p id="resultCount" class="muted"></p>
+</div>
+<div id="list"></div>
+</section>
 
-    if (!proceed) return;
-  }
+<section id="edit" class="hide">
+<h2 id="heading">新增小卡</h2>
+<form id="form">
 
-  // 開啟編輯頁面，讓使用者先確認資料
-  start();
+<label>團體／歌手 *</label>
+<input name="group" required autocomplete="off">
+<div class="suggest" id="groupSuggestions"></div>
 
-  F.productUrl.value = productUrl;
-  F.seller.value = 'Mercari';
-  F.currency.value = 'JPY';
-  F.status.value = '已下單';
-  F.source.value = '其他／特典';
+<label>成員 *</label>
+<input name="member" required autocomplete="off">
+<div class="suggest" id="memberSuggestions"></div>
 
-  if (info.title) {
-    F.name.value = info.title;
-  } else {
-    F.name.value = 'Mercari ' + productId;
-  }
+<label>小卡名稱 *</label>
+<input name="name" required autocomplete="off">
+<div class="suggest" id="nameSuggestions"></div>
 
-  if (info.price) {
-    F.price.value = info.price;
-  }
+<label>商品連結</label>
+<input name="productUrl" type="url" placeholder="https://jp.mercari.com/item/m..." oninput="linkCheck()">
+<div id="linkInfo" class="muted"></div>
+<div id="duplicate" class="warn"></div>
 
-  F.date.value = new Date()
-    .toLocaleDateString('en-CA');
+<label>來源</label>
+<select name="source">
+<option>專輯</option>
+<option>演唱會</option>
+<option>其他／特典</option>
+</select>
 
-  linkCheck();
+<label>演唱會／場次</label>
+<input name="concert" autocomplete="off">
+<div class="suggest" id="concertSuggestions"></div>
 
-  $('heading').textContent =
-    '確認 Mercari 商品資訊';
+<label>專輯</label>
+<input name="album" autocomplete="off">
+<div class="suggest" id="albumSuggestions"></div>
 
-  $('quickMessage').textContent = '';
+<label>版本／特典</label>
+<input name="version" autocomplete="off">
+<div class="suggest" id="versionSuggestions"></div>
+
+<label>購買平台／賣家</label>
+<input name="seller" autocomplete="off">
+<div class="suggest" id="sellerSuggestions"></div>
+
+<label>價格</label>
+<input name="price" type="number" min="0">
+
+<label>幣別</label>
+<select name="currency">
+<option>TWD</option>
+<option>JPY</option>
+<option>KRW</option>
+<option>USD</option>
+</select>
+
+<label>狀態</label>
+<select name="status">
+<option>已入手</option>
+<option>已下單</option>
+<option>想購買</option>
+</select>
+
+<label>購買日期</label>
+<input name="date" type="date">
+
+<label>數量</label>
+<input name="quantity" type="number" min="1" value="1">
+
+<label>備註</label>
+<textarea name="notes"></textarea>
+
+<label>小卡正面照片</label>
+<input type="file" id="front" accept="image/*">
+<div id="pics"></div>
+
+<div class="row" style="margin-top:20px">
+<button type="submit">儲存</button>
+<button type="button" class="secondary" onclick="show('home')">取消</button>
+<button type="button" id="delete" class="secondary" onclick="removeCard()">刪除</button>
+</div>
+</form>
+</section>
+
+<section id="stats" class="hide">
+<h2>收藏統計</h2>
+<div id="totals" class="panel"></div>
+<h2>備份資料</h2>
+<p class="muted">收藏儲存在此裝置的 IndexedDB。請定期備份，避免清除網站資料後遺失。</p>
+<button onclick="exportData()">匯出 JSON 備份</button>
+<button class="secondary" onclick="document.getElementById('import').click()">匯入備份</button>
+<input type="file" id="import" accept=".json,application/json" class="hide">
+</section>
+
+</main>
+
+<script>
+let db,items=[],id=null,photos={};
+
+const $=x=>document.getElementById(x);
+const F=$('form').elements;
+
+const fields=[
+'group','member','name','productUrl','source',
+'concert','album','version','seller','price',
+'currency','status','date','quantity','notes'
+];
+
+function esc(v){
+return String(v??'').replace(/[&<>"']/g,c=>({
+'&':'&amp;','<':'&lt;','>':'&gt;',
+'"':'&quot;',"'":'&#39;'
+}[c]));
+}
+
+function url(v){
+try{
+let u=new URL(v);
+return ['https:','http:'].includes(u.protocol)
+?u.origin+u.pathname.replace(/\/$/,''):'';
+}catch{return ''}
+}
+
+function mercariId(v){
+try{
+let u=new URL(v.trim());
+if(!['jp.mercari.com','www.mercari.com','mercari.com'].includes(u.hostname.toLowerCase()))return '';
+let m=u.pathname.match(/^\/item\/(m\d+)\/?$/i);
+return m?m[1].toLowerCase():'';
+}catch{return ''}
+}
+
+function sameLink(a,b){
+let x=mercariId(a),y=mercariId(b);
+return x&&y?x===y:url(a)===url(b);
+}
+
+function show(s){
+['home','edit','stats'].forEach(x=>$(x).classList.toggle('hide',x!==s));
+if(s==='home')render();
+if(s==='stats')stats();
+}
+
+function tx(mode,fn){
+return new Promise((ok,no)=>{
+let t=db.transaction('cards',mode);
+fn(t.objectStore('cards'));
+t.oncomplete=ok;
+t.onerror=()=>no(t.error);
+});
+}
+
+async function load(){
+items=await new Promise((ok,no)=>{
+let r=db.transaction('cards').objectStore('cards').getAll();
+r.onsuccess=()=>ok(r.result);
+r.onerror=()=>no(r.error);
+});
+updateFilters();
+render();
+}
+
+function count(c){
+return Number(c.quantity||1);
+}
+
+function dashboard(){
+$('totalCount').textContent=items.reduce((a,c)=>a+count(c),0);
+$('ownedCount').textContent=items.filter(c=>c.status==='已入手').reduce((a,c)=>a+count(c),0);
+$('pendingCount').textContent=items.filter(c=>c.status==='已下單').reduce((a,c)=>a+count(c),0);
+$('wishCount').textContent=items.filter(c=>c.status==='想購買').reduce((a,c)=>a+count(c),0);
+}
+
+function updateFilters(){
+const make=(element,values,label)=>{
+let old=element.value;
+let unique=[...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+element.innerHTML='<option value="">'+label+'</option>'+
+unique.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+element.value=unique.includes(old)?old:'';
 };
+
+make($('memberFilter'),items.map(c=>c.member),'全部成員');
+
+let source=$('sourceFilter').value;
+let subset=source?items.filter(c=>c.source===source):items;
+
+make($('eventFilter'),
+subset.flatMap(c=>[c.concert,c.album]),
+'全部');
+}
+
+$('sourceFilter').addEventListener('change',updateFilters);
+
+function render(){
+dashboard();
+
+let q=$('query').value.trim().toLowerCase();
+let member=$('memberFilter').value;
+let source=$('sourceFilter').value;
+let event=$('eventFilter').value;
+let status=$('statusFilter').value;
+
+let found=items.filter(c=>{
+let text=fields.map(k=>String(c[k]||'')).join(' ').toLowerCase();
+return (!q||text.includes(q)) &&
+(!member||c.member===member) &&
+(!source||c.source===source) &&
+(!event||c.concert===event||c.album===event) &&
+(!status||c.status===status);
+});
+
+$('resultCount').textContent='找到 '+found.length+' 筆收藏';
+
+$('list').innerHTML=found.map(c=>`
+<div class="panel card" data-id="${esc(c.id)}">
+${c.front?`<img src="${c.front}">`:'<div style="width:80px;text-align:center;font-size:30px">💗</div>'}
+<div class="card-content">
+<b>${esc(c.group)} · ${esc(c.member)}</b>
+<div>${esc(c.name)}</div>
+<div class="muted">${esc(c.album||c.concert||c.version||c.source)}</div>
+<span class="tag">${esc(c.status)}</span>
+<div><b>${esc(c.price||'0')} ${esc(c.currency||'')}</b></div>
+<div class="muted">數量：${esc(c.quantity||1)}</div>
+</div>
+</div>`).join('')||'<p class="muted">沒有符合條件的小卡。</p>';
+
+document.querySelectorAll('[data-id]').forEach(el=>{
+el.onclick=()=>start(items.find(c=>c.id===el.dataset.id));
+});
+}
+
+// 最近使用的文字建議
+const suggestionFields=[
+'group','member','name','concert','album','version','seller'
+];
+
+function recentValues(key){
+let seen=new Set();
+return [...items].reverse()
+.map(c=>String(c[key]||'').trim())
+.filter(v=>{
+if(!v||seen.has(v.toLowerCase()))return false;
+seen.add(v.toLowerCase());
+return true;
+}).slice(0,8);
+}
+
+function suggestions(key){
+let box=$(key+'Suggestions');
+let input=F[key];
+let typed=input.value.trim().toLowerCase();
+
+let values=recentValues(key).filter(v=>
+!typed||v.toLowerCase().includes(typed)
+);
+
+box.replaceChildren();
+
+values.forEach(v=>{
+let b=document.createElement('button');
+b.type='button';
+b.textContent=v;
+b.onclick=()=>{
+input.value=v;
+suggestions(key);
+if(key==='group')suggestions('member');
+};
+box.appendChild(b);
+});
+}
+
+suggestionFields.forEach(key=>{
+F[key].addEventListener('input',()=>suggestions(key));
+F[key].addEventListener('focus',()=>suggestions(key));
+});
+
+function start(c){
+id=c?.id??null;
+$('form').reset();
+
+photos={front:c?.front||'',back:c?.back||''};
+
+fields.forEach(k=>{
+if(c&&c[k]!=null)F[k].value=c[k];
+});
+
+const incomplete=c&&(!c.group||!c.member);
+F.group.required=!incomplete;
+F.member.required=!incomplete;
+F.name.required=!incomplete;
+
+$('heading').textContent=c?'編輯小卡':'新增小卡';
+$('delete').classList.toggle('hide',!c);
+$('front').value='';
+
+pics();
+linkCheck();
+
+suggestionFields.forEach(suggestions);
+show('edit');
+}
+
+function sharedInfo(raw){
+let match=raw.match(/https?:\/\/[^\s<>「」]+/i);
+let link=match?match[0].replace(/[),，。]+$/,''):raw.trim();
+let priceMatch=raw.match(/(?:¥|￥|JPY\s*|価格[：:]?\s*)([\d,]+)/i);
+let price=priceMatch?priceMatch[1].replace(/,/g,''):'';
+
+let lines=raw.split(/\n/).map(x=>x.trim()).filter(Boolean);
+let title=lines.find(x=>
+x!==link&&!x.includes('http')&&!/^[¥￥\d,\s]+$/.test(x)
+)||'';
+
+return {link,price,title:title.slice(0,150)};
+}
+
+$('quickForm').onsubmit=e=>{
+e.preventDefault();
+
+let info=sharedInfo($('quickUrl').value.trim());
+let m=mercariId(info.link);
+
+if(!m){
+$('quickMessage').textContent='請貼上有效的 Mercari 商品網址';
+return;
+}
+
+let productUrl='https://jp.mercari.com/item/'+m;
+
+let existing=items.find(c=>
+c.productUrl&&sameLink(c.productUrl,productUrl)
+);
+
+if(existing&&!confirm('這個 Mercari 商品已經登記過，仍要新增嗎？'))return;
+
+start();
+
+F.productUrl.value=productUrl;
+F.seller.value='Mercari';
+F.currency.value='JPY';
+F.status.value='已下單';
+F.source.value='其他／特典';
+F.name.value=info.title||'Mercari '+m;
+F.price.value=info.price;
+F.date.value=new Date().toLocaleDateString('en-CA');
+
+$('heading').textContent='確認 Mercari 商品資訊';
+linkCheck();
+suggestionFields.forEach(suggestions);
+};
+
+function linkCheck(){
+let u=url(F.productUrl.value);
+let m=mercariId(u);
+let dupe=u&&items.find(x=>x.id!==id&&sameLink(x.productUrl,u));
+
+$('linkInfo').textContent=m?'Mercari 商品編號：'+m:u?'已填入商品網址':'';
+$('duplicate').textContent=dupe?'⚠️ 此商品連結已存在，請確認是否重複購買。':'';
+}
+
+function pics(){
+$('pics').replaceChildren();
+if(photos.front){
+let img=document.createElement('img');
+img.className='photo';
+img.src=photos.front;
+$('pics').appendChild(img);
+}
+}
+
+function compress(file){
+return new Promise((ok,no)=>{
+let img=new Image(),src=URL.createObjectURL(file);
+img.onload=()=>{
+let s=Math.min(1,1000/Math.max(img.width,img.height));
+let c=document.createElement('canvas');
+c.width=Math.max(1,Math.round(img.width*s));
+c.height=Math.max(1,Math.round(img.height*s));
+c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+URL.revokeObjectURL(src);
+ok(c.toDataURL('image/jpeg',.75));
+};
+img.onerror=()=>{URL.revokeObjectURL(src);no(Error('圖片讀取失敗'))};
+img.src=src;
+});
+}
+
+$('front').onchange=async e=>{
+if(e.target.files[0]){
+try{
+photos.front=await compress(e.target.files[0]);
+pics();
+}catch(err){alert(err.message)}
+}
+};
+
+$('form').onsubmit=async e=>{
+e.preventDefault();
+let c={id:id||crypto.randomUUID(),...photos};
+fields.forEach(k=>c[k]=F[k].value);
+
+try{
+await tx('readwrite',s=>s.put(c));
+await load();
+show('home');
+}catch(err){
+alert('儲存失敗：'+err.message);
+}
+};
+
+async function removeCard(){
+if(id&&confirm('確定刪除這張小卡？')){
+await tx('readwrite',s=>s.delete(id));
+await load();
+show('home');
+}
+}
+
+function stats(){
+let sums={},statuses={},groups={};
+
+items.forEach(c=>{
+let n=count(c);
+statuses[c.status]=(statuses[c.status]||0)+n;
+groups[c.group||'未分類']=(groups[c.group||'未分類']||0)+n;
+
+if(c.status!=='想購買'){
+sums[c.currency||'TWD']=(sums[c.currency||'TWD']||0)+Number(c.price||0)*n;
+}
+});
+
+$('totals').innerHTML=`
+<h3>收藏狀態</h3>
+${Object.entries(statuses).map(([k,v])=>`<p>${esc(k)}：${v} 張</p>`).join('')}
+<h3>各團體收藏</h3>
+${Object.entries(groups).map(([k,v])=>`<p>${esc(k)}：${v} 張</p>`).join('')}
+<h3>累計花費</h3>
+${Object.entries(sums).map(([k,v])=>`<p>${v.toLocaleString()} ${esc(k)}</p>`).join('')}
+`;
+}
+
+function exportData(){
+let b=new Blob([JSON.stringify({
+app:'POCA Pocket',version:3,cards:items
+})],{type:'application/json'});
+
+let u=URL.createObjectURL(b);
+let a=document.createElement('a');
+a.href=u;
+a.download='poca-pocket-backup-'+new Date().toISOString().slice(0,10)+'.json';
+a.click();
+setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+
+$('import').onchange=async e=>{
+try{
+let file=e.target.files[0];
+if(!file)return;
+
+let j=JSON.parse(await file.text());
+
+if(j.app!=='POCA Pocket'||!Array.isArray(j.cards)||
+!j.cards.every(c=>c&&typeof c.id==='string'))
+throw Error('備份格式錯誤');
+
+if(!confirm('匯入會取代目前的所有收藏，確定嗎？'))return;
+
+await tx('readwrite',s=>{
+s.clear();
+j.cards.forEach(c=>s.put(c));
+});
+
+await load();
+stats();
+alert('備份還原完成');
+}catch(err){
+alert(err.message);
+}
+e.target.value='';
+};
+
+(async()=>{
+try{
+db=await new Promise((ok,no)=>{
+let r=indexedDB.open('poca-pocket-v1',1);
+r.onupgradeneeded=()=>{
+if(!r.result.objectStoreNames.contains('cards'))
+r.result.createObjectStore('cards',{keyPath:'id'});
+};
+r.onsuccess=()=>ok(r.result);
+r.onerror=()=>no(r.error);
+});
+await load();
+}catch(e){
+alert('本機資料庫無法開啟：'+e.message);
+}
+})();
+</script>
+</body>
+</html>
